@@ -32,7 +32,7 @@ The code has been tested with PyTorch 1.12.1 and Cuda 11.7.
 
 ## 预训练模型 Pretrained Weights
 
-预训练的权重可以从Google Drive下载，请将它们放入 `checkpoint`文件夹中。
+预训练的权重可以从Google Drive下载，请将它们放入 `checkpoints` 文件夹中。
 
 Pretrained weights can be downloaded from [Google Drive](https://drive.google.com/drive/folders/1Dh7BqXozY59SZKOgVj7_yZ5d09R8qilw?usp=share_link). Please put them into the `checkpoints` folder.
 
