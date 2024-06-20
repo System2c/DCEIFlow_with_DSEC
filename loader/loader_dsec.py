@@ -16,6 +16,8 @@ from matplotlib import pyplot as plt
 from utils import transformers
 import os
 import imageio
+
+from utils.file_io import read_event_h5
 imageio.plugins.freeimage.download()
 from utils.dsec_utils import RepresentationType, VoxelGrid, flow_16bit_to_float
 
@@ -255,6 +257,7 @@ class Sequence(Dataset):
             self.rectify_ev_map = h5_rect['rectify_map'][()]
 
         self._finalizer = weakref.finalize(self, self.close_callback, self.h5f)
+        self.events_nparray = read_event_h5(ev_data_file)
 
     def events_to_voxel_grid(self, p, t, x, y, device: str='cpu'):
         t = (t - t[0]).astype('float32')
@@ -323,6 +326,8 @@ class Sequence(Dataset):
         output['save_submission'] = file_index in self.idx_to_visualize
         # pdb.set_trace()
         output['visualize'] = self.visualize_samples
+        # 获取事件数据
+        output['events_nparray'] = self.events_nparray
         # pdb.set_trace()
         # 符合才取真实值来评估，因为真实值有限
         if output['save_submission']:

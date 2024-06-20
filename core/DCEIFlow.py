@@ -1,3 +1,4 @@
+from pathlib import Path
 import pdb
 import numpy as np
 import torch
@@ -147,7 +148,10 @@ class DCEIFlow(nn.Module):
             image2 = image2.contiguous()
 
         # 数据集里面没有这项
-        events_nparray = read_event_h5('./data/DSEC/test/thun_00_a/events_left/events.h5')
+        # 待修改以符合通用性
+
+        # events_nparray = read_event_h5('./data/DSEC/test/thun_00_a/events_left/events.h5')
+        events_nparray = batch['events_nparray']
         # print(events_nparray.shape)
         # 将事件数据转为事件特征
         numbins = int(self.event_bins / 2)
