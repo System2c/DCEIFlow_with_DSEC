@@ -63,6 +63,10 @@ data/DSEC/test
 │   ├── test_forward_flow_timestamps.csv
 ```
 
+`test_forward_flow_timestamps.csv` 中的 `file_index` 要与 `flow/forward` 中图片文件名的数字相对应。
+
+`file_index` in `test_forward_flow_timestamps.csv` corresponds to the number of picture file name in `flow/forward`.
+
 配置好环境，下载预训练权值后，执行如下命令，得到测试结果。工作区文件夹中会生成 `saved`文件夹，里面存放着一些相关可视化数据。
 
 After the environment is configured and the pretrained weights is downloaded, run the following command to get the consistent results as reported in the paper. A `saved` folder is generated in the workspace folder, which contains some relevant visual data.
