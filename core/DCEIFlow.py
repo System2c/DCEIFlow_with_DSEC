@@ -151,7 +151,8 @@ class DCEIFlow(nn.Module):
         # 待修改以符合通用性
 
         # events_nparray = read_event_h5('./data/DSEC/test/thun_00_a/events_left/events.h5')
-        events_nparray = batch['events_nparray']
+        events_nparray = batch['events_nparray'].cpu().numpy()
+        events_nparray = events_nparray.reshape(events_nparray.shape[1], events_nparray.shape[2])
         # print(events_nparray.shape)
         # 将事件数据转为事件特征
         numbins = int(self.event_bins / 2)
