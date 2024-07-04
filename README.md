@@ -51,16 +51,16 @@ To evaluate our model, you need first download the files version of [DSEC](https
 data/DSEC/test
 ├── thun_00_a
 │   ├── events_left
-│   │	├── events.h5
+│   │	├── events.h5		# 官网中的Event Data
 │   │	├── rectify_map.h5
 │   ├── flow
-│   │   ├── forward
+│   │   ├── forward		# 在Ground Truth Data/disparity_image.zip中
 │   │   │   ├── 000002.png
 │   │   │   ├── 000004.png
 │   │   │   ├── ...
 │   │   │   ├── 000082.png
-│   ├── image_timestamps.txt
-│   ├── test_forward_flow_timestamps.csv
+│   ├── image_timestamps.txt	# 在Image Data/image_timestamps.txt中
+│   ├── test_forward_flow_timestamps.csv	# 由Ground Truth Data/optical_flow_forward_timestamps.txt改编而来，同时需新增file_index列
 ```
 
 `test_forward_flow_timestamps.csv` 中的 `file_index` 要与 `flow/forward` 中图片文件名的数字相对应。
