@@ -23,9 +23,11 @@ class L1Loss(nn.Module):
     def resizeflow_tosize(self, flow, new_size, mode='bilinear'):
         if new_size[0] == flow.shape[2] and new_size[1] == flow.shape[3]:
             return flow
-
+        # print(flow.shape)
+        # print(new_size)
         h_scale = new_size[0] / flow.shape[2]
         w_scale = new_size[1] / flow.shape[3]
+        # print(h_scale,w_scale)
         assert h_scale == w_scale
         return F.interpolate(flow, size=new_size, mode=mode, align_corners=True)
 
@@ -34,6 +36,11 @@ class L1Loss(nn.Module):
         flow_loss = 0.0
         # exlude invalid pixels and extremely large diplacements
         mag = torch.sum(flow_gt**2, dim=1, keepdim=True).sqrt()
+        valid_original = valid_original.unsqueeze(1)
+        mag = mag.permute(0, 1, 3, 2)
+        mag = mag.repeat(1, 1, 480//2, 1)
+        # print(valid_original.size())  # torch.Size([1, 1, 480, 640])
+        # print(mag.size())  # torch.Size([1, 1, 480, 640])
         valid = (valid_original >= 0.5) & (mag < self.max_flow)
 
         for i in range(len(flow_preds)):
@@ -42,12 +49,15 @@ class L1Loss(nn.Module):
                 i_loss = (flow_preds[i] - flow_gt).abs()
                 flow_loss += i_weight * (valid * i_loss).mean()
             else:
-                scaled_flow_gt = self.resizeflow_tosize(flow_gt, flow_preds[i].shape[2:])
+                # scaled_flow_gt = self.resizeflow_tosize(flow_gt, flow_preds[i].shape[2:])
+                scaled_flow_gt = flow_gt.permute(0, 3, 1, 2)  # ([1,480,640,2]) → ([1,2,480,640])
                 i_loss = (flow_preds[i] - scaled_flow_gt).abs()
                 scaled_mag = torch.sum(scaled_flow_gt**2, dim=1, keepdim=True).sqrt()
                 scaled_valid = (self.resizeflow_tosize(valid_original, flow_preds[i].shape[2:]) >= 0.5) & (scaled_mag < self.max_flow)
                 flow_loss += i_weight * (scaled_valid * i_loss).mean()
-
+        # print(flow_preds[-1].shape)
+        # print(flow_gt.shape)
+        flow_gt = flow_gt.permute(0, 3, 1, 2)  # ([1,480,640,2]) → ([1,2,480,640])
         epe = torch.sum((flow_preds[-1] - flow_gt)**2, dim=1).sqrt()
         epe = epe.view(-1)[valid.view(-1)]
     

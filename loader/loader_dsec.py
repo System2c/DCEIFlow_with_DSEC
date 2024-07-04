@@ -16,12 +16,12 @@ from matplotlib import pyplot as plt
 from utils import transformers
 import os
 import imageio
-
 from utils.file_io import read_event_h5
 imageio.plugins.freeimage.download()
 from utils.dsec_utils import RepresentationType, VoxelGrid, flow_16bit_to_float
 
 VISU_INDEX = 1
+
 
 class EventSlicer:
     def __init__(self, h5f: h5py.File):
@@ -83,12 +83,11 @@ class EventSlicer:
         t_start_us_idx = t_start_ms_idx + idx_start_offset
         t_end_us_idx = t_start_ms_idx + idx_end_offset
         # Again add t_offset to get gps time
-        events['t'] = time_array_conservative[idx_start_offset:idx_end_offset] + self.t_offset
+        events['t'] = time_array_conservative[idx_start_offset:idx_end_offset] + np.uint64(self.t_offset)
         for dset_str in ['p', 'x', 'y']:
             events[dset_str] = np.asarray(self.events[dset_str][t_start_us_idx:t_end_us_idx])
             assert events[dset_str].size == events['t'].size
         return events
-
 
     @staticmethod
     def get_conservative_window_ms(ts_start_us: int, ts_end_us) -> Tuple[int, int]:
@@ -105,8 +104,8 @@ class EventSlicer:
         window_end_ms:      conservative end time in milliseconds
         """
         assert ts_end_us > ts_start_us
-        window_start_ms = math.floor(ts_start_us/1000)
-        window_end_ms = math.ceil(ts_end_us/1000)
+        window_start_ms = math.floor(ts_start_us / 1000)
+        window_end_ms = math.ceil(ts_end_us / 1000)
         return window_start_ms, window_end_ms
 
     @staticmethod
@@ -177,8 +176,9 @@ class EventSlicer:
 
 
 class Sequence(Dataset):
-    def __init__(self, seq_path: Path, representation_type: RepresentationType, mode: str='test', delta_t_ms: int=100,
-                 num_bins: int=15, transforms=None, name_idx=0, visualize=False):
+    def __init__(self, seq_path: Path, representation_type: RepresentationType, mode: str = 'test',
+                 delta_t_ms: int = 100,
+                 num_bins: int = 15, transforms=None, name_idx=0, visualize=False):
         assert num_bins >= 1
         assert delta_t_ms == 100
         assert seq_path.is_dir()
@@ -208,7 +208,7 @@ class Sequence(Dataset):
             test_timestamp_file,
             delimiter=','
         )
-        self.idx_to_visualize = file[:,2]
+        self.idx_to_visualize = file[:, 2]
 
         # Save output dimensions
         self.height = 480
@@ -216,18 +216,17 @@ class Sequence(Dataset):
         self.num_bins = num_bins
 
         # Just for now, we always train with num_bins=15
-        assert self.num_bins==15
+        assert self.num_bins == 15
 
         # Set event representation
         self.voxel_grid = None
         if representation_type == RepresentationType.VOXEL:
             self.voxel_grid = VoxelGrid((self.num_bins, self.height, self.width), normalize=True)
 
-
         # Save delta timestamp in ms
         self.delta_t_us = delta_t_ms * 1000
 
-        #Load and compute timestamps and indices
+        # Load and compute timestamps and indices
         timestamps_images = np.loadtxt(seq_path / 'image_timestamps.txt', dtype='int64')
         image_indices = np.arange(len(timestamps_images))
         # But only use every second one because we train at 10 Hz, and we leave away the 1st & last one
@@ -241,12 +240,12 @@ class Sequence(Dataset):
         # 光流数据文件夹
         forward_flow_folder = seq_path / 'flow' / 'forward'
         forward_flow_filenames = sorted([f for f in os.listdir(forward_flow_folder)
-                                             if os.path.isfile(os.path.join(forward_flow_folder, f))])
+                                         if os.path.isfile(os.path.join(forward_flow_folder, f))])
         seq_length = len(forward_flow_filenames)
         print(seq_length)
         for index in range(seq_length):
             forward_flow_file = os.path.join(forward_flow_folder,
-                                        forward_flow_filenames[index])
+                                             forward_flow_filenames[index])
             self.forward_flow_filenames.append(forward_flow_file)
         # print(self.forward_flow_filenames)
         # pdb.set_trace()
@@ -257,11 +256,12 @@ class Sequence(Dataset):
             self.rectify_ev_map = h5_rect['rectify_map'][()]
 
         self._finalizer = weakref.finalize(self, self.close_callback, self.h5f)
-        self.events_nparray = read_event_h5(ev_data_file)
+        # pdb.set_trace()
+        self.events_nparray = read_event_h5(str(ev_data_file))
 
-    def events_to_voxel_grid(self, p, t, x, y, device: str='cpu'):
+    def events_to_voxel_grid(self, p, t, x, y, device: str = 'cpu'):
         t = (t - t[0]).astype('float32')
-        t = (t/t[-1])
+        t = (t / t[-1])
         x = x.astype('float32')
         y = y.astype('float32')
         pol = p.astype('float32')
@@ -280,7 +280,7 @@ class Sequence(Dataset):
     def get_disparity_map(filepath: Path):
         assert filepath.is_file()
         disp_16bit = cv2.imread(str(filepath), cv2.IMREAD_ANYDEPTH)
-        return disp_16bit.astype('float32')/256
+        return disp_16bit.astype('float32') / 256
 
     @staticmethod
     def load_flow(flowfile: Path):
@@ -326,7 +326,6 @@ class Sequence(Dataset):
         output['save_submission'] = file_index in self.idx_to_visualize
         # pdb.set_trace()
         output['visualize'] = self.visualize_samples
-        # 获取事件数据
         output['events_nparray'] = self.events_nparray
         # pdb.set_trace()
         # 符合才取真实值来评估，因为真实值有限
@@ -349,8 +348,10 @@ class Sequence(Dataset):
 
             if crop_window is not None:
                 # Cropping (+- 2 for safety reasons)
-                x_mask = (x_rect >= crop_window['start_x']-2) & (x_rect < crop_window['start_x']+crop_window['crop_width']+2)
-                y_mask = (y_rect >= crop_window['start_y']-2) & (y_rect < crop_window['start_y']+crop_window['crop_height']+2)
+                x_mask = (x_rect >= crop_window['start_x'] - 2) & (
+                            x_rect < crop_window['start_x'] + crop_window['crop_width'] + 2)
+                y_mask = (y_rect >= crop_window['start_y'] - 2) & (
+                            y_rect < crop_window['start_y'] + crop_window['crop_height'] + 2)
                 mask_combined = x_mask & y_mask
                 p = p[mask_combined]
                 t = t[mask_combined]
@@ -362,17 +363,18 @@ class Sequence(Dataset):
             else:
                 event_representation = self.events_to_voxel_grid(p, t, x_rect, y_rect)
                 output[names[i]] = event_representation
-            output['name_map']=self.name_idx
+            output['name_map'] = self.name_idx
         return output
 
     def __getitem__(self, idx):
-        sample =  self.get_data_sample(idx)
+        sample = self.get_data_sample(idx)
         return sample
 
 
 class SequenceRecurrent(Sequence):
-    def __init__(self, seq_path: Path, representation_type: RepresentationType, mode: str='test', delta_t_ms: int=100,
-                 num_bins: int=15, transforms=None, sequence_length=1, name_idx=0, visualize=False):
+    def __init__(self, seq_path: Path, representation_type: RepresentationType, mode: str = 'test',
+                 delta_t_ms: int = 100,
+                 num_bins: int = 15, transforms=None, sequence_length=1, name_idx=0, visualize=False):
         super(SequenceRecurrent, self).__init__(seq_path, representation_type, mode, delta_t_ms, transforms=transforms,
                                                 name_idx=name_idx, visualize=visualize)
         self.sequence_length = sequence_length
@@ -381,14 +383,14 @@ class SequenceRecurrent(Sequence):
     def get_continuous_sequences(self):
         continuous_seq_idcs = []
         if self.sequence_length > 1:
-            for i in range(len(self.timestamps_flow)-self.sequence_length+1):
-                diff = self.timestamps_flow[i+self.sequence_length-1] - self.timestamps_flow[i]
-                if diff < np.max([100000 * (self.sequence_length-1) + 1000, 101000]):
+            for i in range(len(self.timestamps_flow) - self.sequence_length + 1):
+                diff = self.timestamps_flow[i + self.sequence_length - 1] - self.timestamps_flow[i]
+                if diff < np.max([100000 * (self.sequence_length - 1) + 1000, 101000]):
                     continuous_seq_idcs.append(i)
         else:
-            for i in range(len(self.timestamps_flow)-1):
-                diff = self.timestamps_flow[i+1] - self.timestamps_flow[i]
-                if diff < np.max([100000 * (self.sequence_length-1) + 1000, 101000]):
+            for i in range(len(self.timestamps_flow) - 1):
+                diff = self.timestamps_flow[i + 1] - self.timestamps_flow[i]
+                if diff < np.max([100000 * (self.sequence_length - 1) + 1000, 101000]):
                     continuous_seq_idcs.append(i)
         return continuous_seq_idcs
 
@@ -418,58 +420,101 @@ class SequenceRecurrent(Sequence):
         if 'flipped' in sample.keys():
             flip = sample['flipped']
 
-        for i in range(self.sequence_length-1):
+        for i in range(self.sequence_length - 1):
             j += 1
             ts_old = ts_cur
             ts_cur = self.timestamps_flow[j]
-            assert(ts_cur-ts_old < 100000 + 1000)
+            assert (ts_cur - ts_old < 100000 + 1000)
             sample = self.get_data_sample(j, crop_window=crop_window, flip=flip)
             sequence.append(sample)
 
         # Check if the current sample is the first sample of a continuous sequence
-        if idx==0 or self.valid_indices[idx]-self.valid_indices[idx-1] != 1:
+        if idx == 0 or self.valid_indices[idx] - self.valid_indices[idx - 1] != 1:
             sequence[0]['new_sequence'] = 1
-            print("Timestamp {} is the first one of the next seq!".format(self.timestamps_flow[self.valid_indices[idx]]))
+            print(
+                "Timestamp {} is the first one of the next seq!".format(self.timestamps_flow[self.valid_indices[idx]]))
         else:
             sequence[0]['new_sequence'] = 0
         return sequence
 
+
 class DatasetProvider:
-    def __init__(self, dataset_path: Path, representation_type: RepresentationType, delta_t_ms: int=100, num_bins=15,
+    def __init__(self, dataset_path: Path, representation_type: RepresentationType, task, delta_t_ms: int = 100, num_bins=15,
                  type='standard', config=None, visualize=False):
-        test_path = dataset_path / 'test'
-        assert dataset_path.is_dir(), str(dataset_path)
-        assert test_path.is_dir(), str(test_path)
-        assert delta_t_ms == 100
-        self.config=config
-        self.name_mapper_test = []
+        self.task = task
+        if self.task == 'train':
 
-        test_sequences = list()
-        for child in test_path.iterdir():
-            self.name_mapper_test.append(str(child).split("/")[-1])
-            if type == 'standard':
-                test_sequences.append(Sequence(child, representation_type, 'test', delta_t_ms, num_bins,
-                                               transforms=[],
-                                               name_idx=len(self.name_mapper_test)-1,
-                                               visualize=visualize))
-            elif type == 'warm_start':
-                test_sequences.append(SequenceRecurrent(child, representation_type, 'test', delta_t_ms, num_bins,
-                                                        transforms=[], sequence_length=1,
-                                                        name_idx=len(self.name_mapper_test)-1,
-                                                        visualize=visualize))
-            else:
-                raise Exception('Please provide a valid subtype [standard/warm_start] in config file!')
+            train_path = dataset_path / 'train'
+            assert dataset_path.is_dir(), str(dataset_path)
+            assert train_path.is_dir(), str(train_path)
+            assert delta_t_ms == 100
+            self.config = config
+            self.name_mapper_test = []
+            self.name_mapper_train = []
 
-        self.test_dataset = torch.utils.data.ConcatDataset(test_sequences)
+            train_sequences = list()
+            for child in train_path.iterdir():
+                self.name_mapper_train.append(str(child).split("/")[-1])
+                if type == 'standard':
+                    train_sequences.append(Sequence(child, representation_type, 'train', delta_t_ms, num_bins,
+                                                    transforms=[],
+                                                    name_idx=len(self.name_mapper_train) - 1,
+                                                    visualize=visualize))
+                elif type == 'warm_start':
+                    train_sequences.append(SequenceRecurrent(child, representation_type, 'train', delta_t_ms, num_bins,
+                                                             transforms=[], sequence_length=1,
+                                                             name_idx=len(self.name_mapper_train) - 1,
+                                                             visualize=visualize))
+                else:
+                    raise Exception('Please provide a valid subtype [standard/warm_start] in config file!')
+
+            self.train_dataset = torch.utils.data.ConcatDataset(train_sequences)
+
+        else:
+            test_path = dataset_path / 'test'
+            assert dataset_path.is_dir(), str(dataset_path)
+            assert test_path.is_dir(), str(test_path)
+            assert delta_t_ms == 100
+            self.config = config
+            self.name_mapper_test = []
+            self.name_mapper_train = []
+
+            test_sequences = list()
+            for child in test_path.iterdir():
+                self.name_mapper_test.append(str(child).split("/")[-1])
+                if type == 'standard':
+                    test_sequences.append(Sequence(child, representation_type, 'test', delta_t_ms, num_bins,
+                                                   transforms=[],
+                                                   name_idx=len(self.name_mapper_test) - 1,
+                                                   visualize=visualize))
+                elif type == 'warm_start':
+                    test_sequences.append(SequenceRecurrent(child, representation_type, 'test', delta_t_ms, num_bins,
+                                                            transforms=[], sequence_length=1,
+                                                            name_idx=len(self.name_mapper_test) - 1,
+                                                            visualize=visualize))
+                else:
+                    raise Exception('Please provide a valid subtype [standard/warm_start] in config file!')
+
+            self.test_dataset = torch.utils.data.ConcatDataset(test_sequences)
+
 
     def get_test_dataset(self):
         return self.test_dataset
 
+    def get_train_dataset(self):
+        return self.train_dataset
 
     def get_name_mapping_test(self):
         return self.name_mapper_test
 
+    def get_name_mapping_train(self):
+        return self.name_mapper_train
+
     def summary(self, logger):
-        logger.write_line("================================== Dataloader Summary ====================================", True)
+        logger.write_line("================================== Dataloader Summary ====================================",
+                          True)
         logger.write_line("Loader Type:\t\t" + self.__class__.__name__, True)
-        logger.write_line("Number of Voxel Bins: {}".format(self.test_dataset.datasets[0].num_bins), True)
+        if self.task == "train":
+            logger.write_line("Number of Voxel Bins: {}".format(self.train_dataset.datasets[0].num_bins), True)
+        else:
+            logger.write_line("Number of Voxel Bins: {}".format(self.test_dataset.datasets[0].num_bins), True)

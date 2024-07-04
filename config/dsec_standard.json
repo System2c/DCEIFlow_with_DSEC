@@ -4,8 +4,16 @@
     "gpu": 0,
     "subtype": "standard",
     "save_dir": "saved",
+    "train_save_dir": "train_saved",
     "data_loader": {
         "test": {
+            "args": {
+                "batch_size": 1,
+                "shuffle": false,
+                "num_voxel_bins": 15
+            }
+        },
+        "train": {
             "args": {
                 "batch_size": 1,
                 "shuffle": false,
@@ -14,6 +22,9 @@
         }
     },
     "test": {
+        "checkpoint": "checkpoints/DCEIFlow.pth"
+    },
+    "train": {
         "checkpoint": "checkpoints/DCEIFlow.pth"
     }
 }

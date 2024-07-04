@@ -21,6 +21,24 @@ from core import DCEIFlow
 from utils.utils import setup_seed, count_parameters, count_all_parameters, build_module
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 import pdb
+import torch.optim as optim
+from train import Train
+try:
+    from torch.cuda.amp import GradScaler
+except:
+    # dummy gradscale for PyTorch < 1.6
+    class GradScaler:
+        def __init__(self):
+            pass
+        def scale(self, loss):
+            return loss
+        def unscale_(self, optimizer):
+            pass
+        def step(self, optimizer):
+            optimizer.step()
+        def update(self):
+            pass
+
 
 def initialize_tester(config):
     # Warm Start
@@ -83,7 +101,8 @@ def test(args):
             delta_t_ms=100,
             config=config,
             type=config['subtype'].lower(),
-            visualize=args.visualize)
+            visualize=args.visualize,
+            task=args.task)
         loader.summary(logger)
         test_set = loader.get_test_dataset()
         additional_loader_returns = {'name_mapping_test': loader.get_name_mapping_test()}
@@ -132,19 +151,22 @@ def test(args):
     # model.load_state_dict(checkpoint['model'])
     # model.load_state_dict(checkpoint)
 
-    state_dict = torch.load(config['test']['checkpoint'], map_location=torch.device("cpu")) 
+    state_dict = torch.load(config['test']['checkpoint'], map_location=torch.device("cpu"))
+    print(state_dict.keys())
     try:
         if "model" in state_dict.keys():
             state_dict = state_dict.pop("model")
+            # print('sdadada')
         elif 'model_state_dict' in state_dict.keys():
             state_dict = state_dict.pop("model_state_dict")
 
         if "module." in list(state_dict.keys())[0]:
             for key in list(state_dict.keys()):
                 state_dict.update({key[7:]:state_dict.pop(key)})
-        # print(state_dict)
+        # print(state_dict.keys())
         # del state_dict['fnet.conv1.weight']
         # del state_dict['cnet.conv1.weight']
+
         padding_tensor = torch.zeros(64, 12, 7, 7)
         state_dict['fnet.conv1.weight'] = torch.cat((state_dict['fnet.conv1.weight'], padding_tensor), dim=1)
         state_dict['cnet.conv1.weight'] = torch.cat((state_dict['cnet.conv1.weight'], padding_tensor), dim=1)
@@ -176,6 +198,101 @@ def test(args):
     testlog = test._test(args)
     print(testlog['evaluation_info'])
 
+
+def train(args):
+    # Choose correct config file
+    if args.dataset.lower()=='dsec':
+        if args.type.lower()=='warm_start':
+            config_path = 'config/dsec_warm_start.json'
+        elif args.type.lower()=='standard':
+            config_path = 'config/dsec_standard.json'
+        else:
+            raise Exception('Please provide a valid argument for --type. [warm_start/standard]')
+
+
+    # Load config file
+    config = json.load(open(config_path))
+    # Create Save Folder
+    save_path = helper.create_save_path(config['train_save_dir'].lower(), config['name'].lower())
+    print('Storing output in folder {}'.format(save_path))
+    # Copy config file to save dir
+    json.dump(config, open(os.path.join(save_path, 'config.json'), 'w'),
+              indent=4, sort_keys=False)
+    # Logger
+    logger = Logger(save_path)
+    logger.initialize_file("train")
+
+    # Instantiate Dataset
+    # Case: DSEC Dataset
+    additional_loader_returns = None
+    if args.dataset.lower() == 'dsec':
+        # Dsec Dataloading
+        loader = DatasetProvider(
+            dataset_path=Path(args.path),
+            representation_type=RepresentationType.VOXEL,
+            delta_t_ms=100,
+            config=config,
+            type=config['subtype'].lower(),
+            visualize=args.visualize,
+            task=args.task)
+        loader.summary(logger)
+        train_set = loader.get_train_dataset()
+        additional_loader_returns = {'name_mapping_train': loader.get_name_mapping_train()}
+    
+
+
+    # Instantiate Dataloader
+    train_loader = DataLoader(train_set,
+                                 batch_size=config['data_loader']['train']['args']['batch_size'],
+                                 shuffle=config['data_loader']['train']['args']['shuffle'],
+                                 num_workers=args.num_workers,
+                                 drop_last=True)
+
+    # Load Model
+    # model = eraft.ERAFT(
+    #     config=config, 
+    #     n_first_channels=config['data_loader']['test']['args']['num_voxel_bins']
+    # )
+    # 构建模型----------------------------------------
+    config=config
+    n_first_channels=config['data_loader']['train']['args']['num_voxel_bins']
+    model = build_module("core", args.model)(args, config, n_first_channels)
+    loss = build_module("core.loss", "Combine")(args)
+    metric_fun = build_module("core.metric", "Combine")(args)
+    optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay, \
+        eps=args.epsilon)
+    lr_scheduler = optim.lr_scheduler.OneCycleLR(optimizer, args.lr, \
+        steps_per_epoch=len(train_loader), epochs=args.epoch)
+    scaler = GradScaler(enabled=args.mixed_precision)
+    state_dict = torch.load(config['train']['checkpoint'], map_location=torch.device("cpu")) 
+   
+
+
+
+    train = Train(
+        model=model,
+        config=config,
+        loss=loss,
+        data_loader=train_loader,
+        optimizer=optimizer,
+        lr_scheduler=lr_scheduler, scaler=scaler, train_logger=logger
+    )
+
+
+    # train.summary()
+    start = train.load(config['train']['checkpoint'], only_model=True)
+    for i in range(start+1, args.epoch+1):
+        print(">>> Start the {}/{} training epoch with save feq {}".format(i, args.epoch, args.save_feq), "training")
+        trainlog = train._train(args)
+        print(trainlog['evaluation_info'])
+
+        # 保存模型
+        if i % args.save_feq == 0:
+            train.store(args.save_path, args.name, i)
+
+
+
+
 if __name__ == '__main__':
     config_path = "config/config_test.json"
     # Argument Parser
@@ -196,7 +313,20 @@ if __name__ == '__main__':
     parser.add_argument("--mixed_precision", action='store_true', default=False, help="")
     parser.add_argument("--metric", type=str, nargs='+', default=["epe"], help="")
     parser.add_argument('--gpus', type=int, nargs='+', default=[-1])
-    
+    parser.add_argument('--task', type=str, help="train or test", default="train")
+    parser.add_argument("--loss", type=str, nargs='+', default=["L1Loss"], help="")
+    parser.add_argument("--loss_gamma", type=float, default=0.8, help="")
+    parser.add_argument("--loss_weights", type=float, nargs='+', default=[1.0], help="")
+    parser.add_argument("--epoch", type=int, default=5, help="")
+    parser.add_argument('--iters', type=int, default=6, help="iters from low level to higher")
+    parser.add_argument("--lr", type=float, default=0.0001, help="")
+    parser.add_argument("--weight_decay", type=float, default=0.0001, help="")
+    parser.add_argument("--epsilon", type=float, default=1e-8, help="")
+    parser.add_argument("--clip", type=float, default=1.0, help="")
+    parser.add_argument("--eval_feq", type=int, default=5, help="every eval_feq for epoch")
+    parser.add_argument("--save_feq", type=int, default=1, help="every save_feq for epoch")
+    parser.add_argument("--save_path", type=str, default="./logs", help="")
+    parser.add_argument("--name", type=str, default="DSEC_model_xx", help="")
     args = parser.parse_args()
 
     if args.gpus[0] == -1:
@@ -204,8 +334,12 @@ if __name__ == '__main__':
     args.nprocs = len(args.gpus)
     print(args)
     # Run Test Script
-    test(args)
+    if args.task == "train":
+        train(args)
+    else:
+        test(args)
 
 # 运行命令
-# python main.py --path ./data/DSEC --type standard --visualize True
+# python main.py --path ./data/DSEC --type standard --visualize 
 
+# python main.py --path ./data/DSEC --type standard --visualize --task test

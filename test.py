@@ -102,8 +102,10 @@ class Test(object):
         with torch.no_grad():
             # 在需要设置断点的位置添加以下语句
             # pdb.set_trace()
+            sum_epe = 0
             for batch_idx, batch in enumerate(self.data_loader):
-                
+                if 'flow_gt' not in batch.keys():
+                    break
                 # 声明im1，im2
                 im1 = batch['event_volume_old']
                 im2 = batch['event_volume_new']
@@ -120,7 +122,7 @@ class Test(object):
                 # 获取运行时间
                 elapsed = time.time() - tm  # 输入到输出的时间
                 output['flow_pred'] = padder.unpad(output['flow_final'])
-                
+
                 name = ["DSEC/thun_00_a"]       # 根据需要修改名字
                 batch['basename'] = name
                 
@@ -128,8 +130,11 @@ class Test(object):
                 
                 if batch['save_submission']:
                     metric_each = metric_fun.calculate(output, batch, name)
+                    print('')
+                    print("epe of {}:{}".format(batch_idx+1, metric_each['epe']))
+                    sum_epe += metric_each['epe']
                     # pdb.set_trace()
-                    print("Sample {}/{}".format(batch_idx + 1, len(self.data_loader)))
+                    # print("Sample {}/{}".format(batch_idx + 1, len(self.data_loader)))
                 
                     reduced_metric_each = metric_each
                     # 记录和保存训练过程中的指标
@@ -150,7 +155,13 @@ class Test(object):
                 # pdb.set_trace()  
 
             # 测试数据
+            aver_epe = sum_epe / batch_idx
             metrics_str, all_metrics = metric_fun.summary()
+            print('batch_idx', batch_idx)
+            print('sum_epe:', sum_epe)
+            print('aver_epe:', aver_epe)
+            print('metrics_str:', metrics_str)
+            print('all_metrics:', all_metrics)
             metric_fun.clear()
             self.model.train()
             bar.close()

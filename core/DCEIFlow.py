@@ -1,4 +1,3 @@
-from pathlib import Path
 import pdb
 import numpy as np
 import torch
@@ -141,18 +140,17 @@ class DCEIFlow(nn.Module):
         hdim = self.hidden_dim
         cdim = self.context_dim
         
-        if self.training or self.isbi:
-            assert 'image2' in batch.keys()
-            image2 = batch['image2']
-            image2 = 2 * (image2 / 255.0) - 1.0
-            image2 = image2.contiguous()
+        # if self.training or self.isbi:
+        #     assert 'image2' in batch.keys()
+        #     image2 = batch['image2']
+        #     image2 = 2 * (image2 / 255.0) - 1.0
+        #     image2 = image2.contiguous()
 
         # 数据集里面没有这项
-        # 待修改以符合通用性
-
-        # events_nparray = read_event_h5('./data/DSEC/test/thun_00_a/events_left/events.h5')
-        events_nparray = batch['events_nparray'].cpu().numpy()
-        events_nparray = events_nparray.reshape(events_nparray.shape[1], events_nparray.shape[2])
+        # events_nparray = read_event_h5('./data/DSEC/test/zurich_city_11_a/events_left/events.h5')
+        events_nparray2 = batch['events_nparray'].cpu().numpy()
+        events_nparray = events_nparray2.reshape(events_nparray2.shape[1], events_nparray2.shape[2])
+        # print(events_nparray.shape, events_nparray2.shape)
         # print(events_nparray.shape)
         # 将事件数据转为事件特征
         numbins = int(self.event_bins / 2)
@@ -297,7 +295,7 @@ class DCEIFlow(nn.Module):
                 flow_final=flow_up,
                 flow_final_bw=flow_up_bw,
                 fmap2_gt=fmap2,
-                # fmap2_pseudo=pseudo_fmap2,
+                fmap2_pseudo=pseudo_fmap2,
                 fmap1_gt=fmap1,
                 fmap1_pseudo=pseudo_fmap1,
             )

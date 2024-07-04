@@ -68,7 +68,6 @@ def flow_16bit_to_float(flow_16bit: np.ndarray):
     assert flow_16bit.ndim == 3
     h, w, c = flow_16bit.shape
     assert c == 3
-
     valid2D = flow_16bit[..., 2] == 1
     assert valid2D.shape == (h, w)
     assert np.all(flow_16bit[~valid2D, -1] == 0)
