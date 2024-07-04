@@ -72,5 +72,41 @@ data/DSEC/test
 After the environment is configured and the pretrained weights is downloaded, run the following command to get the consistent results as reported in the paper. A `saved` folder is generated in the workspace folder, which contains some relevant visual data.
 
 ```
+python main.py --path ./data/DSEC --type standard --visualize True --task test
+```
+
+## 训练部分 Trainning
+
+更新于2024.07.04。
+
+Updated 2024.07.04.
+
+要进行训练，你必须下载数据集。示例数据结构类似于测试数据结构，例如：
+
+To train, you must download the dataset. The example data structure is similar to the test data structure, for example:
+
+```
+data/DSEC/train
+├── thun_00_a
+│   ├── events_left
+│   │	├── events.h5		# 官网中的Event Data
+│   │	├── rectify_map.h5
+│   ├── flow
+│   │   ├── forward		# 在Ground Truth Data/disparity_image.zip中
+│   │   │   ├── 000002.png
+│   │   │   ├── 000004.png
+│   │   │   ├── ...
+│   │   │   ├── 000082.png
+│   ├── image_timestamps.txt	# 在Image Data/image_timestamps.txt中
+│   ├── test_forward_flow_timestamps.csv	# 由Ground Truth Data/optical_flow_forward_timestamps.txt改编而来，同时需新增file_index列
+```
+
+`test_forward_flow_timestamps.csv` 中的 `file_index` 要与 `flow/forward` 中图片文件名的数字相对应。
+
+`file_index` in `test_forward_flow_timestamps.csv` corresponds to the number of picture file name in `flow/forward`.
+
+配置好环境，下载预训练权值后，执行如下命令，即可运行。
+
+```
 python main.py --path ./data/DSEC --type standard --visualize True
 ```
